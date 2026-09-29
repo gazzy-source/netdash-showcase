@@ -1,0 +1,179 @@
+<div align="center">
+
+# 🛰️ NetDash
+
+**A home-network monitor that tells you *what* broke, *where* it broke (your home or your ISP), and *what to do* — before you notice.**
+
+![In production](https://img.shields.io/badge/status-in_production_24%2F7-22d3a0?style=for-the-badge&logo=netlify&logoColor=white)
+[![Code highlights](https://img.shields.io/badge/read-code_highlights-8b5cf6?style=for-the-badge)](docs/HIGHLIGHTS.md)
+
+![React](https://img.shields.io/badge/React_18-20232a?logo=react&logoColor=61dafb)
+![Netlify Functions](https://img.shields.io/badge/Netlify_Functions-Node_22-00c7b7?logo=netlify&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres_+_RLS-3ecf8e?logo=supabase&logoColor=white)
+![Python](https://img.shields.io/badge/Python-collector_+_sentinel-3776ab?logo=python&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram-bot_alerts-26a5e4?logo=telegram&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-109_Python_+_7_JS_suites-8b5cf6)
+![PWA](https://img.shields.io/badge/PWA-phone_·_tablet_·_TV-f59e0b)
+
+<img src="docs/screenshots/overview.png" alt="NetDash overview: status, uptime, latency, fibre and per-access-point heartbeat bars" width="880">
+
+</div>
+
+---
+
+## The problem
+
+A home with fibre internet, an ISP router and a mesh of Wi-Fi access points fails in confusing ways:
+*"Wi-Fi connected, no internet"*, one room's access point dropping, the router needing a restart, or the ISP
+itself being down. Consumer apps show **that** something is wrong — not **which layer** failed or **who** should fix it.
+
+NetDash watches every layer continuously, from both **inside** the home and **outside** it, and turns raw
+probes into a plain-language verdict with evidence, confidence and the exact next step.
+
+## ✨ What it does
+
+| | Feature | Details |
+|---|---|---|
+| 🩺 | **Diagnosis, not just alerts** | 15+ failure classes, exercised by 18 simulated scenarios (router down, ISP outage, DNS, DHCP, mesh node / backhaul, Wi-Fi association, single device…) with evidence, confidence, alternatives and recommended actions. |
+| 🛰️ | **24/7 outside-in watch** | A cloud "sentinel" hears the router's own syslog heartbeat. Silence + an outside ping of the ISP gateway tells *home offline* from *ISP outage* — even with the laptop off. |
+| 📶 | **Uptime-Kuma-style heartbeat bars** | Per access point, 1 min / 10 min / 1 h buckets on local-time edges. Five explicit states — **Up · Down · Unstable · No data · Monitor off** — so missing data is never shown as up or down. |
+| 🕸️ | **Live mesh topology** | Interactive tree of router → access points → devices, with signal, band and latency per node. |
+| 🚨 | **Incident timeline** | Start/end/duration, affected nodes and devices, black-box samples, recurrence patterns, "what fixed it" — one parent incident per outage, never an alert storm. |
+| 🤖 | **Telegram bot** | Alerts (open / escalate / resolve, mute with catch-up, false-alarm corrections) and interactive screens: status, mesh, devices, who's home, today's report. |
+| 👪 | **People & presence** | Assign devices to people; "who's home" from the devices they carry, with nap smoothing. |
+| 🔐 | **Two audiences, one app** | Owner sees everything; public visitors get a redacted view (no IPs, MACs, SSIDs, firmware, presence) served by a separate API — and nothing tells them it's reduced. |
+
+## 📸 Screens
+
+<sub>Captured from the production app. Access points are shown by model and personal device names are replaced; the
+heartbeat-bar history uses sample data so the shots aren't dominated by the monitoring laptop's sleep gaps.</sub>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/topology.png" alt="Topology: mesh tree with per-node devices"><br><sub><b>Topology</b> — mesh tree, per-access-point devices and signal</sub></td>
+<td width="50%"><img src="docs/screenshots/incidents.png" alt="Incidents: 30-day summary and history"><br><sub><b>Incidents</b> — 30-day uptime, recovery times, history & patterns</sub></td>
+</tr>
+<tr>
+<td>
+<img src="docs/screenshots/mobile-overview.png" alt="Phone: overview"><br><sub><b>Phone</b> — installable PWA</sub></td>
+<td><img src="docs/screenshots/mobile-topology.png" alt="Phone: topology"><br><sub>Also laid out for tablets and Android TV</sub>
+</td>
+</tr>
+</table>
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+  subgraph Home["🏠 Home network"]
+    R["ISP router<br/>fibre + PPPoE"]
+    M1["Mesh AP"]
+    M2["Mesh AP"]
+    M3["Mesh AP"]
+    L["💻 Laptop collector<br/>Python · probes every 10 s"]
+    R --- M1
+    R --- M2
+    R --- M3
+    L -.->|"ping · DNS · router pages"| R
+    L -.->|ping| M1
+  end
+  subgraph Cloud["☁️ Cloud"]
+    S["🛰️ Sentinel (VPS)<br/>syslog heartbeat + outside pings"]
+    F["⚡ Netlify Functions<br/>ingest · telemetry · view · bot · jobs"]
+    DB[("🗄️ Supabase Postgres<br/>owner-only RLS")]
+    B[("🧊 Netlify Blobs<br/>backups · error log")]
+  end
+  U["🌐 Dashboard (React PWA)"]
+  T["🤖 Telegram"]
+
+  R -->|"remote syslog every ~50 s"| S
+  S -->|telemetry| F
+  L -->|"telemetry + router snapshots<br/>(offline queue, replay)"| F
+  F <--> DB
+  F <--> B
+  U <-->|"owner: session API · visitor: redacted view"| F
+  F -->|"alerts · screens"| T
+```
+
+### How an outage gets a verdict
+
+```mermaid
+flowchart TD
+  A[Probe cycle every 10 s] --> B{Laptop on the<br/>home network?}
+  B -->|"no / away / Wi-Fi switching"| X[🟦 Monitoring issue<br/>never an outage]
+  B -->|"yes"| C{Router answering?}
+  C -->|"no"| D{Cloud sentinel still<br/>hears the router?}
+  D -->|"yes"| X
+  D -->|"no"| E[🔴 Router down<br/>home side]
+  C -->|"yes"| F{Internet by IP?}
+  F -->|"no"| G{ISP first hop /<br/>fibre signal?}
+  G -->|"fibre down / hop fails"| H[🔴 ISP outage]
+  G -->|"hop OK"| I[🟠 Internet stuck at router<br/>restart suggested]
+  F -->|"yes"| J{DNS · mesh nodes · devices}
+  J --> K[🟡 DNS / mesh node / backhaul /<br/>single-device findings]
+  J -->|"all fine"| L[🟢 Healthy]
+```
+
+## 🧰 Tech stack
+
+| Layer | Tech |
+|---|---|
+| Frontend | React 18 (single-file JSX → esbuild bundle), installable PWA with service worker, strict CSP |
+| API | Netlify Functions (Node 22, ESM), scheduled jobs (watchdog 10 min, cleanup + backup nightly, daily report) |
+| Data | Supabase Postgres with owner-only Row Level Security, realtime "something changed" nudges |
+| Collector | Python — ICMP/DNS/TCP/HTTPS probes, rate-limited router scraping, LAN fingerprinting, on-disk offline queue |
+| Sentinel | Python systemd service on a VPS — UDP syslog receiver, unprivileged ICMP, crash-safe state |
+| Alerts | Telegram Bot API — webhook with secret verification, role-based screens, HMAC-signed background jobs |
+
+## 🔬 Engineering highlights
+
+- **Honest data** — every heartbeat bucket has an explicit state; uptime is computed over *measured* time only and says how much was measured. Late uploads keep their original timestamps and are marked as delayed, not missing.
+- **No false alarms from the monitor itself** — laptop sleep, Wi-Fi switching, phone-hotspot bridging, stray virtual adapters and broken router reads are all classified as *monitoring* issues; laptop "router down" verdicts are cross-checked against the cloud sentinel and relabelled (with a "false alarm" follow-up) when it heard the router all along.
+- **Resilience** — the collector buffers telemetry on disk when offline and replays it in order; the server upserts idempotently, ignores out-of-date replays and skips malformed data instead of blocking the queue.
+- **Privacy by construction** — visitors are served through a separate endpoint that redacts IPs, MACs (HMAC stand-ins), SSIDs and firmware, including inside free text; an automated audit checks every page for leaks.
+- **Security** — Supabase RLS denies anonymous access to every table; every API endpoint verifies the owner's session or the collector key; strict CSP, HSTS, no framing; public endpoints are rate-limited.
+- **Operability** — health endpoint for uptime monitors, job check-ins, web-app crash reports from any visitor, nightly backups of everything entered by hand, version stamp in the UI.
+
+## ✅ Testing
+
+```bash
+npm test          # 109 Python tests (diagnosis, incidents, collector buffering, sampling) + 7 JS suites
+npm run deploy    # runs the full test gate, builds, deploys — refuses if anything fails
+```
+
+Plus headless-Chrome checks against the live site: smoke tests at phone / tablet / desktop / TV widths for owner and
+visitor, a console-error sweep, a privacy audit, tap/click flows, badges, login, performance and offline mode.
+Failure scenarios (router down, ISP outage, mesh node loss, DHCP failure, …) are replayed through the real
+diagnosis engine with `simulate_run.py`.
+
+## 🔒 About this repository
+
+NetDash runs in production for a real household, so its full source stays private (it's tied to that home's
+network). This showcase has the README, architecture, screenshots with personal details replaced, and
+**[real code excerpts](docs/HIGHLIGHTS.md)** from the hard parts. A walkthrough of the live system and the full code
+are available to prospective clients on request.
+
+<details>
+<summary><b>📂 How the private codebase is organised</b></summary>
+
+```
+public/index.html          the web app (React 18 JSX) → esbuild bundle
+netlify/functions/         API endpoints, scheduled jobs, Telegram bot, shared modules
+monitor.py diagnose.py     collector: probe loop, failure classifier
+incidents.py probes.py     incident lifecycle + black box, network probes
+scraper*.py                rate-limited router reads, snapshot upload
+sentinel/                  VPS service (syslog heartbeat, outside-in ISP checks)
+tests/                     Python unittest + node test suites
+tools/                     headless-browser checks, bot preview
+db_*.sql                   schema + migrations
+```
+</details>
+
+---
+
+<div align="center">
+
+Designed and built by **[Gazzy](https://github.com/gazzy-source)** — full-stack web, cloud functions, Python services and IoT/network tooling.<br>
+<sub>Need a dashboard, monitoring system, automation or bot like this built? Open an issue here or reach out through my GitHub profile.</sub>
+
+</div>
