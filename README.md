@@ -61,6 +61,19 @@ heartbeat-bar history uses sample data so the shots aren't dominated by the moni
 </tr>
 </table>
 
+### 🤖 Telegram bot
+
+<sub>Real bot output, rendered as a chat. Access points are shown as generic rooms and device names are replaced.</sub>
+
+<table>
+<tr>
+<td width="25%"><img src="docs/screenshots/bot-home.png" alt="Bot: home status"><br><sub><b>Home</b> — internet, router, fibre, Wi-Fi, mesh and the last 24 h at a glance</sub></td>
+<td width="25%"><img src="docs/screenshots/bot-alert.png" alt="Bot: alert, recovery and incident list"><br><sub><b>Alerts</b> — what happened, what's affected, what to do, then "back to normal"</sub></td>
+<td width="25%"><img src="docs/screenshots/bot-today.png" alt="Bot: today's report"><br><sub><b>Today</b> — outages vs. laptop-only blips, router health, Wi-Fi load, insights</sub></td>
+<td width="25%"><img src="docs/screenshots/bot-mesh.png" alt="Bot: mesh and settings"><br><sub><b>Mesh & settings</b> — tap a node for its devices; one-tap mute</sub></td>
+</tr>
+</table>
+
 ## 🏗️ Architecture
 
 ```mermaid
