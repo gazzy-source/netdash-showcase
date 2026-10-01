@@ -5,6 +5,7 @@
 **A home-network monitor that tells you *what* broke, *where* it broke (your home or your ISP), and *what to do* — before you notice.**
 
 ![In production](https://img.shields.io/badge/status-in_production_24%2F7-22d3a0?style=for-the-badge&logo=netlify&logoColor=white)
+![Version](https://img.shields.io/badge/release-v1.0.0-3b82f6?style=for-the-badge)
 [![Code highlights](https://img.shields.io/badge/read-code_highlights-8b5cf6?style=for-the-badge)](docs/HIGHLIGHTS.md)
 
 ![React](https://img.shields.io/badge/React_18-20232a?logo=react&logoColor=61dafb)
@@ -12,7 +13,8 @@
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres_+_RLS-3ecf8e?logo=supabase&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-collector_+_sentinel-3776ab?logo=python&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram-bot_alerts-26a5e4?logo=telegram&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-109_Python_+_7_JS_suites-8b5cf6)
+![Tests](https://img.shields.io/badge/tests-185_Python_+_7_JS_suites-8b5cf6)
+![CI](https://img.shields.io/badge/CI-Linux_·_macOS_·_Windows-22d3a0)
 ![PWA](https://img.shields.io/badge/PWA-phone_·_tablet_·_TV-f59e0b)
 
 <img src="docs/screenshots/overview.png" alt="NetDash overview: status, uptime, latency, fibre and per-access-point heartbeat bars" width="880">
@@ -23,7 +25,8 @@
 
 ## The problem
 
-A home with fibre internet, an ISP router and a mesh of Wi-Fi access points fails in confusing ways:
+A network with fibre internet, an ISP router and a mesh of Wi-Fi access points — in a home, a school or an office —
+fails in confusing ways:
 *"Wi-Fi connected, no internet"*, one room's access point dropping, the router needing a restart, or the ISP
 itself being down. Consumer apps show **that** something is wrong — not **which layer** failed or **who** should fix it.
 
@@ -41,7 +44,9 @@ probes into a plain-language verdict with evidence, confidence and the exact nex
 | 🚨 | **Incident timeline** | Start/end/duration, affected nodes and devices, black-box samples, recurrence patterns, "what fixed it" — one parent incident per outage, never an alert storm. |
 | 🤖 | **Telegram bot** | Alerts (open / escalate / resolve, mute with catch-up, false-alarm corrections) and interactive screens: status, mesh, devices, who's home, today's report. |
 | 👪 | **People & presence** | Assign devices to people; "who's home" from the devices they carry, with nap smoothing. |
-| 🔐 | **Two audiences, one app** | Owner sees everything; public visitors get a redacted view (no IPs, MACs, SSIDs, firmware, presence) served by a separate API — and nothing tells them it's reduced. |
+| 🔐 | **Two audiences, one app** | Owner and admins see everything; public visitors get a redacted view (no IPs, MACs, SSIDs, firmware, presence) served by a separate API — and nothing tells them it's reduced. |
+| 🧭 | **Any network, set up in the app** | v1.0 runs on any installation: a generic router adapter (any router) plus vendor adapters, device identification from the IEEE registry and what devices announce (no hard-coded lists), and a **Settings** page for the network's name, ISP, router, time zone, access-point names, report times, admins and visitors. A new install shows "waiting for the first report" screens, not endless loading. |
+| 🧱 | **Honest when things break** | If the database can't be reached, every page says *"Can't load the latest data right now"* and the header shows *Reconnecting…* — never a stale "all clear". |
 
 ## 📸 Screens
 
@@ -51,7 +56,7 @@ heartbeat-bar history uses sample data so the shots aren't dominated by the moni
 <table>
 <tr>
 <td width="50%"><img src="docs/screenshots/topology.png" alt="Topology: mesh tree with per-node devices"><br><sub><b>Topology</b> — mesh tree, per-access-point devices and signal</sub></td>
-<td width="50%"><img src="docs/screenshots/incidents.png" alt="Incidents: 30-day summary and history"><br><sub><b>Incidents</b> — 30-day uptime, recovery times, history & patterns</sub></td>
+<td width="50%"><img src="docs/screenshots/incidents.png" alt="Incidents: who was at fault over 30 days, and the history"><br><sub><b>Incidents</b> — who was at fault (home · ISP · external · monitor only), uptime, recovery times, history</sub></td>
 </tr>
 <tr>
 <td>
@@ -146,23 +151,29 @@ flowchart TD
 - **Privacy by construction** — visitors are served through a separate endpoint that redacts IPs, MACs (HMAC stand-ins), SSIDs and firmware, including inside free text; an automated audit checks every page for leaks.
 - **Security** — Supabase RLS denies anonymous access to every table; every API endpoint verifies the owner's session or the collector key; strict CSP, HSTS, no framing; public endpoints are rate-limited.
 - **Operability** — health endpoint for uptime monitors, job check-ins, web-app crash reports from any visitor, nightly backups of everything entered by hand, version stamp in the UI.
+- **Steady, fast pages** — nothing jumps while data loads (layout shift 0.04, well under the 0.1 "good" mark): sections hold the space they took last time until all their inputs are in. Settings is fetched in the background, so it opens at once.
+- **Guarded build** — the test gate fails on stray control characters in source (a shell-mangled `\b` once silently broke a regex), and CI runs every suite on Linux, macOS and Windows plus the database rules on Postgres.
 
 ## ✅ Testing
 
 ```bash
-npm test          # 109 Python tests (diagnosis, incidents, collector buffering, sampling) + 7 JS suites
-npm run deploy    # runs the full test gate, builds, deploys — refuses if anything fails
+npm test             # 185 Python tests (diagnosis, incidents, collector, sentinel) + 7 JS suites
+                     # (identification, names, presence, reconcile, redaction, bot, web)
+bash tests/db/run.sh # schema + access rules on a real Postgres (Docker)
+npm run deploy       # runs the full test gate, builds, deploys — refuses if anything fails
 ```
 
 Plus headless-Chrome checks against the live site: smoke tests at phone / tablet / desktop / TV widths for owner and
-visitor, a console-error sweep, a privacy audit, tap/click flows, badges, login, performance and offline mode.
+visitor, a click-every-control error sweep, a privacy audit (admin vs visitor, on screen and in every response),
+light/dark themes with WCAG contrast of every text, "go there" navigation, People and Dismiss/Restore flows (which
+put the real data back exactly), and performance (load, tab switches, layout shift).
 Failure scenarios (router down, ISP outage, mesh node loss, DHCP failure, …) are replayed through the real
 diagnosis engine with `simulate_run.py`.
 
 ## 🔒 About this repository
 
-NetDash runs in production for a real household, so its full source stays private (it's tied to that home's
-network). This showcase has the README, architecture, screenshots with personal details replaced, and
+NetDash runs in production 24/7. Since v1.0 it can be installed on any network (homes, schools, offices); the full
+source stays private. This showcase has the README, architecture, screenshots with personal details replaced, and
 **[real code excerpts](docs/HIGHLIGHTS.md)** from the hard parts. A walkthrough of the live system and the full code
 are available to prospective clients on request.
 
@@ -172,13 +183,16 @@ are available to prospective clients on request.
 ```
 public/index.html          the web app (React 18 JSX) → esbuild bundle
 netlify/functions/         API endpoints, scheduled jobs, Telegram bot, shared modules
+                           (_site: per-installation settings · _auth: owner + admins · _redact: visitor view)
 monitor.py diagnose.py     collector: probe loop, failure classifier
 incidents.py probes.py     incident lifecycle + black box, network probes
-scraper*.py                rate-limited router reads, snapshot upload
+routers/                   router adapters: generic (any router) + vendor-specific, behind one interface
 sentinel/                  VPS service (syslog heartbeat, outside-in ISP checks)
-tests/                     Python unittest + node test suites
+supabase/                  schema.sql for fresh installs + migrations for upgrades
+install/ Dockerfile        collector as a Windows task, a Linux / macOS service or a container
+tests/                     Python unittest + node suites + Postgres access-rule tests
 tools/                     headless-browser checks, bot preview
-db_*.sql                   schema + migrations
+docs/                      install, configuration, routers, Telegram, sentinel, operations, upgrading
 ```
 </details>
 
