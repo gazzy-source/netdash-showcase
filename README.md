@@ -5,7 +5,7 @@
 **A home-network monitor that tells you *what* broke, *where* it broke (your home or your ISP), and *what to do* — before you notice.**
 
 ![In production](https://img.shields.io/badge/status-in_production_24%2F7-22d3a0?style=for-the-badge&logo=netlify&logoColor=white)
-![Version](https://img.shields.io/badge/release-v1.0.3-3b82f6?style=for-the-badge)
+![Version](https://img.shields.io/badge/release-v1.0.4-3b82f6?style=for-the-badge)
 [![Code highlights](https://img.shields.io/badge/read-code_highlights-8b5cf6?style=for-the-badge)](docs/HIGHLIGHTS.md)
 
 ![React](https://img.shields.io/badge/React_18-20232a?logo=react&logoColor=61dafb)
